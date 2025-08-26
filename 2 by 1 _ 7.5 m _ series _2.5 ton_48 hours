@@ -2,55 +2,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pygfunction as gt
 import pandas as pd
+
 def main():
-    # ---------------------------------------------------------------
-    # Simulation parameters
-    # ---------------------------------------------------------------
-    # Borehole dimensions
-    D   = 4.0       # burial depth [m]
-    H   = 88    # length [m]
-    r_b = 0.1524/2    # borehole radius [m]
-
-    # -------------------------
-    # Bore field geometry
-    # -------------------------
-    N_1 = 1        # Number of boreholes in x-direction
-    N_2 = 2        # Number of boreholes in y-direction
-    B = 7.5        # Borehole spacing (m)
-
-    # Pipe dimensions
-    r_out   = 0.032/2    # outer radius [m]
-    r_in    = 0.027/2    # inner radius [m]
-    D_s     = 0.05     # shank spacing [m]
-    epsilon = 1.0e-6    # roughness [m]
-
-    # Pipe positions (single U-tube: [(x_in, y_in), (x_out, y_out)])
-    pos_single = [(-D_s, 0.0), ( D_s, 0.0)]
-
-    # Ground
-    alpha = 1.0e-6    # thermal diffusivity [m2/s]
-    k_s   = 2.45       # thermal conductivity [W/m.K]
-    T_g   = 25.5      # undisturbed ground temperature [°C]
-
-    # Grout / pipe conductivity
-    k_g = 2.98         # grout [W/m.K]
-    k_p = 0.7         # pipe  [W/m.K]
-
-    # Fluid (20% MPG at 20°C)
-    m_flow = 15/60                         # total mass flow rate [kg/s]
-    fluid  = gt.media.Fluid('WATER', 20.0)
-    cp_f   = fluid.cp
-    rho_f  = fluid.rho
-    mu_f   = fluid.mu
-    k_f    = fluid.k
-    # g-Function options
-    options = {'nSegments': 8, 'disp': True}
-
-'''def main():
     # -------------------------
     # Ground properties
     # -------------------------
-    T_g   = 25.0       # undisturbed ground temp [°C]
+    T_g   = 28.0       # undisturbed ground temp [°C]
     k_s   = 2.5        # ground conductivity [W/m.K]
     alpha = 1.0e-6     # thermal diffusivity [m2/s]
 
@@ -58,14 +15,14 @@ def main():
     # Borehole dimensions
     # -------------------------
     D = 4.0        # Borehole buried depth (m)
-    H = 150.0      # Borehole length (m)
+    H = 50.0      # Borehole length (m)
     r_b = 0.075    # Borehole radius (m)
 
     # -------------------------
     # Bore field geometry
     # -------------------------
-    N_1 = 1        # Number of boreholes in x-direction
-    N_2 = 2        # Number of boreholes in y-direction
+    N_1 = 4       # Number of boreholes in x-direction
+    N_2 = 1        # Number of boreholes in y-direction
     B = 7.5        # Borehole spacing (m)
 
     # -------------------------
@@ -89,7 +46,7 @@ def main():
     # -------------------------
     m_flow_borehole = 0.3   # [kg/s] per borehole
     fluid = gt.media.Fluid('Water', 20.)  # assume water at 20 °C
-    cp_f, rho_f, mu_f, k_f = fluid.cp, fluid.rho, fluid.mu, fluid.k'''
+    cp_f, rho_f, mu_f, k_f = fluid.cp, fluid.rho, fluid.mu, fluid.k
 
     # -------------------------
     # Simulation parameters
@@ -98,7 +55,7 @@ def main():
     tmax = 48 * 3600.0     # simulate 2 days
     Nt   = int(np.ceil(tmax / dt))
     time = dt * np.arange(1, Nt+1)
-    hours = time / 3600
+    hours = time/3600
 
     # -------------------------
     # Load aggregation
@@ -133,32 +90,26 @@ def main():
     network = gt.networks.Network(borefield, UTubes, bore_connectivity=bore_connectivity)
 
     # -------------------------
-    # g-function for individual boreholes with UBWT
+    # g-function
     # -------------------------
     time_req = LoadAgg.get_times_for_simulation()
     m_flow_network = m_flow_borehole * nBoreholes
-    options = {'nSegments': 8, 'disp': True}
-    
-    # Initialize g-function with UBWT boundary condition for each borehole
-    gFunc_Tb = []
-    for i in range(nBoreholes):
-        gFunc_Tb.append(
-            gt.gfunction.gFunction(
-                network, alpha, time=time_req, m_flow_network=m_flow_network,
-                cp_f=cp_f, boundary_condition='UBWT', options=options
-            )
-        )
-        LoadAgg.initialize(gFunc_Tb[i].gFunc / (2*np.pi*k_s))
+    gFunc = gt.gfunction.gFunction(
+        network, alpha, time=time_req, m_flow_network=m_flow_network,
+        cp_f=cp_f, boundary_condition='MIFT',
+        options={'nSegments': 8, 'disp': True}
+    )
+    LoadAgg.initialize(gFunc.gFunc / (2*np.pi*k_s))
 
     # -------------------------
     # Cooling load (2.5 ton = ~11.3 kW)
     # -------------------------
     Q_reject_W = -11300.0   # heat injected into ground
     Q_tot = np.full(Nt, Q_reject_W)
+
     # -------------------------
     # Time marching
     # -------------------------
-
     T_b     = np.zeros(Nt)
     T_f_in  = np.zeros(Nt)
     T_f_out = np.zeros(Nt)
@@ -180,30 +131,21 @@ def main():
         )
 
     # -------------------------
-    # Visualization: g-function curves for each borehole
+    # Plots
     # -------------------------
-    plt.figure(figsize=(10, 6))
-    for i in range(nBoreholes):
-        plt.plot(np.log(time / 3600), gFunc_Tb[i].gFunc[0, 0, :], label=f'Borehole {i+1} g-function')
+    fig, ax = plt.subplots(2,1, figsize=(10,8))
+    ax[0].plot(hours, Q_tot/1000)
+    ax[0].set_xlabel("Time [h]")
+    ax[0].set_ylabel("Heat Rejection [kW]")
+    ax[0].grid(True)
 
-    plt.xlabel('log(t / ts)')
-    plt.ylabel('g-function')
-    plt.legend()
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
-    # -------------------------
-    # Borehole wall temperatures
-    # -------------------------
-    plt.figure(figsize=(10, 6))
-    for i in range(nBoreholes):
-        plt.plot(time / (3600*24), gFunc_Tb[i].Tb[0, :], label=f'Borehole {i+1} Wall Temp')
+    ax[1].plot(hours, T_b, label="Borehole wall")
+    ax[1].plot(hours, T_f_out, '-.', label="Outlet fluid")
+    ax[1].set_xlabel("Time [h]")
+    ax[1].set_ylabel("Temperature [°C]")
+    ax[1].legend()
+    ax[1].grid(True)
 
-    plt.xlabel('Time (days)')
-    plt.ylabel('Borehole Wall Temperature (°C)')
-    plt.title('Borehole Wall Temperature over 2 Days')
-    plt.legend()
-    plt.grid(True)
     plt.tight_layout()
     plt.show()
 
@@ -217,8 +159,9 @@ def main():
         'T_f_in_degC': T_f_in,
         'T_f_out_degC': T_f_out
     })
-    df.to_csv("ac_2p5ton_seriesBoreholes_UBWT.csv", index=False)
-    print("Saved: ac_2p5ton_seriesBoreholes_UBWT.csv")
+    df.to_csv("ac_2p5ton_seriesBoreholes.csv", index=False)
+    print("Saved: ac_2p5ton_seriesBoreholes.csv")
+    
 
 if __name__ == "__main__":
     main()
