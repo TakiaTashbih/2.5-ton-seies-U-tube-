@@ -93,7 +93,7 @@ def main():
     # g-function
     # -------------------------
     time_req = LoadAgg.get_times_for_simulation()
-    m_flow_network = m_flow_borehole * nBoreholes
+    m_flow_network = m_flow_borehole 
     gFunc = gt.gfunction.gFunction(
         network, alpha, time=time_req, m_flow_network=m_flow_network,
         cp_f=cp_f, boundary_condition='MIFT',
