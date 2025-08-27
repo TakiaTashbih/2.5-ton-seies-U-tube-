@@ -97,7 +97,7 @@ def main():
     gFunc = gt.gfunction.gFunction(
         network, alpha, time=time_req, m_flow_network=m_flow_network,
         cp_f=cp_f, boundary_condition='MIFT',
-        options={'nSegments': 8, 'disp': True}
+        options={'nSegments': 8, 'disp': True},method='similarities'
     )
     LoadAgg.initialize(gFunc.gFunc / (2*np.pi*k_s))
 
